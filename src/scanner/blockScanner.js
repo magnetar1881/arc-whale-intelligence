@@ -3,8 +3,7 @@ const { sendAlert } = require("../telegram/bot");
 const {
   insertWhale,
   updateWallet,
-  updateToken,
-  getTopWhales
+  updateTokenStats,
 } = require("../database/db");
 
 const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
@@ -94,7 +93,7 @@ async function startScanner() {
           await updateWallet(from, Number(amount));
 
           // token update
-          await updateToken(log.address, tokenData.symbol, from, type);
+          await updateTokenStats(log.address, tokenData.symbol, type);
 
           // DB insert
           await insertWhale({
