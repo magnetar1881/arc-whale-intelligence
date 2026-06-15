@@ -1,11 +1,11 @@
 const sqlite3 = require("sqlite3").verbose();
+
 const db = new sqlite3.Database("./data/whale.db");
 
 // ========================
 // TABLE INIT
 // ========================
 db.serialize(() => {
-
   db.run(`
     CREATE TABLE IF NOT EXISTS whales (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +38,6 @@ db.serialize(() => {
       trust_score REAL DEFAULT 0
     )
   `);
-
 });
 
 // ========================
@@ -47,11 +46,9 @@ db.serialize(() => {
 function insertWhale(data) {
   return new Promise((resolve, reject) => {
     db.run(
-      `
-      INSERT OR IGNORE INTO whales
-      (txHash, wallet, token, amount, type)
-      VALUES (?, ?, ?, ?, ?)
-      `,
+      `INSERT OR IGNORE INTO whales
+       (txHash, wallet, token, amount, type)
+       VALUES (?, ?, ?, ?, ?)`,
       [data.txHash, data.wallet, data.token, data.amount, data.type],
       function (err) {
         if (err) reject(err);
@@ -67,14 +64,12 @@ function insertWhale(data) {
 function updateWallet(wallet, amount) {
   return new Promise((resolve, reject) => {
     db.run(
-      `
-      INSERT INTO wallets (wallet, total_volume, transfer_count, last_seen)
-      VALUES (?, ?, 1, datetime('now'))
-      ON CONFLICT(wallet) DO UPDATE SET
-        total_volume = total_volume + ?,
-        transfer_count = transfer_count + 1,
-        last_seen = datetime('now')
-      `,
+      `INSERT INTO wallets (wallet, total_volume, transfer_count, last_seen)
+       VALUES (?, ?, 1, datetime('now'))
+       ON CONFLICT(wallet) DO UPDATE SET
+         total_volume = total_volume + ?,
+         transfer_count = transfer_count + 1,
+         last_seen = datetime('now')`,
       [wallet, amount, amount],
       (err) => {
         if (err) reject(err);
@@ -85,19 +80,41 @@ function updateWallet(wallet, amount) {
 }
 
 // ========================
-// TOKEN UPDATE (V4)
+// WALLET SCORE (V6)
+// ========================
+function updateWalletScore(wallet) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE wallets
+       SET whale_score =
+       CASE
+         WHEN total_volume > 100000 THEN 1.0
+         WHEN total_volume > 50000 THEN 0.7
+         WHEN total_volume > 10000 THEN 0.4
+         ELSE 0.1
+       END
+       WHERE wallet = ?`,
+      [wallet],
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+  });
+}
+
+// ========================
+// TOKEN UPDATE
 // ========================
 function updateTokenStats(token, symbol, type) {
   return new Promise((resolve, reject) => {
     db.run(
-      `
-      INSERT INTO tokens (token, symbol, transfer_count, mint_count, unique_wallets)
-      VALUES (?, ?, 1, ?, 1)
-      ON CONFLICT(token) DO UPDATE SET
-        transfer_count = transfer_count + 1,
-        mint_count = mint_count + ?,
-        unique_wallets = unique_wallets + 1
-      `,
+      `INSERT INTO tokens (token, symbol, transfer_count, mint_count, unique_wallets)
+       VALUES (?, ?, 1, ?, 1)
+       ON CONFLICT(token) DO UPDATE SET
+         transfer_count = transfer_count + 1,
+         mint_count = mint_count + ?,
+         unique_wallets = unique_wallets + 1`,
       [
         token,
         symbol,
@@ -113,17 +130,15 @@ function updateTokenStats(token, symbol, type) {
 }
 
 // ========================
-// TOP WHALES
+// TOP WALLETS
 // ========================
 function getTopWhales(limit = 10) {
   return new Promise((resolve, reject) => {
     db.all(
-      `
-      SELECT wallet, total_volume, transfer_count
-      FROM wallets
-      ORDER BY total_volume DESC
-      LIMIT ?
-      `,
+      `SELECT wallet, total_volume, transfer_count, whale_score
+       FROM wallets
+       ORDER BY total_volume DESC
+       LIMIT ?`,
       [limit],
       (err, rows) => {
         if (err) reject(err);
@@ -136,6 +151,7 @@ function getTopWhales(limit = 10) {
 module.exports = {
   insertWhale,
   updateWallet,
+  updateWalletScore,
   updateTokenStats,
   getTopWhales
 };

@@ -44,19 +44,37 @@ Transfers: ${w.transfer_count}
 });
 
 // ======================
-// /wallet (bonus intel)
+// /wallet
 // ======================
 bot.onText(/\/wallet (.+)/, async (msg, match) => {
   const wallet = match[1];
 
   bot.sendMessage(
     msg.chat.id,
-`🔍 Wallet Tracker
+    `🔍 Wallet Tracker
 
 ${wallet}
 
-(advanced analytics coming in V4)`
+(advanced analytics coming soon)`
   );
+});
+
+// ======================
+// /top
+// ======================
+bot.onText(/\/top/, async (msg) => {
+  const data = await getTopWhales(10);
+
+  let text = "🐋 TOP WALLETS V6\n\n";
+
+  data.forEach((w, i) => {
+    text += `#${i + 1}\n`;
+    text += `Wallet: ${w.wallet}\n`;
+    text += `Volume: ${Number(w.total_volume).toFixed(2)}\n`;
+    text += `Score: ${w.whale_score}\n\n`;
+  });
+
+  bot.sendMessage(msg.chat.id, text);
 });
 
 module.exports = { sendAlert };
