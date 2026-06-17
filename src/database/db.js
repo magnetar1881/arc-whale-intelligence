@@ -1,11 +1,23 @@
+const fs = require("fs");
+const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 
-const db = new sqlite3.Database("./data/whale.db");
+// ========================
+// ENSURE DATA DIRECTORY EXISTS
+// ========================
+const DB_DIR = path.join(__dirname, "../../data");
+if (!fs.existsSync(DB_DIR)) {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+}
+
+const db = new sqlite3.Database(path.join(DB_DIR, "whale.db"));
 
 // ========================
 // TABLE INIT
 // ========================
 db.serialize(() => {
+  db.run("PRAGMA journal_mode = WAL");
+
   db.run(`
     CREATE TABLE IF NOT EXISTS whales (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,9 +52,6 @@ db.serialize(() => {
   `);
 });
 
-// ========================
-// WHALE INSERT
-// ========================
 function insertWhale(data) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -58,9 +67,6 @@ function insertWhale(data) {
   });
 }
 
-// ========================
-// WALLET UPDATE
-// ========================
 function updateWallet(wallet, amount) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -79,9 +85,6 @@ function updateWallet(wallet, amount) {
   });
 }
 
-// ========================
-// WALLET SCORE (V6)
-// ========================
 function updateWalletScore(wallet) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -103,9 +106,6 @@ function updateWalletScore(wallet) {
   });
 }
 
-// ========================
-// TOKEN UPDATE
-// ========================
 function updateTokenStats(token, symbol, type) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -129,9 +129,6 @@ function updateTokenStats(token, symbol, type) {
   });
 }
 
-// ========================
-// TOP WALLETS
-// ========================
 function getTopWhales(limit = 10) {
   return new Promise((resolve, reject) => {
     db.all(
