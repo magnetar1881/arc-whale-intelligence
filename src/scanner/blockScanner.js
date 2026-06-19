@@ -201,7 +201,7 @@ ${txHash}
           `;
 
           console.log("🐋 WHALE:", symbol, amount);
-          await sendAlert(message);
+          await sendAlert(message, token);
 
         } catch (e) {
           console.log("log skip:", e.message);

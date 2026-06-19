@@ -2,9 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const sqlite3 = require("sqlite3").verbose();
 
-// ========================
-// ENSURE DATA DIRECTORY EXISTS
-// ========================
 const DB_DIR = path.join(__dirname, "../../data");
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
@@ -12,9 +9,6 @@ if (!fs.existsSync(DB_DIR)) {
 
 const db = new sqlite3.Database(path.join(DB_DIR, "whale.db"));
 
-// ========================
-// TABLE INIT
-// ========================
 db.serialize(() => {
   db.run("PRAGMA journal_mode = WAL");
 
@@ -48,6 +42,18 @@ db.serialize(() => {
       mint_count INTEGER DEFAULT 0,
       unique_wallets INTEGER DEFAULT 0,
       trust_score REAL DEFAULT 0
+    )
+  `);
+
+  // token = NULL  -> bu chat tüm whale alarmlarına abone
+  // token = '0x..' -> bu chat sadece o tokene abone
+  db.run(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      token TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(chat_id, token)
     )
   `);
 });
@@ -145,10 +151,178 @@ function getTopWhales(limit = 10) {
   });
 }
 
+// ========================
+// SUBSCRIPTIONS
+// ========================
+function addSubscription(chatId, token) {
+  const normalizedToken = token ? token.toLowerCase() : null;
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT OR IGNORE INTO subscriptions (chat_id, token) VALUES (?, ?)`,
+      [String(chatId), normalizedToken],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this?.changes);
+      }
+    );
+  });
+}
+
+function removeSubscription(chatId, token) {
+  const normalizedToken = token ? token.toLowerCase() : null;
+  return new Promise((resolve, reject) => {
+    const sql = normalizedToken === null
+      ? `DELETE FROM subscriptions WHERE chat_id = ? AND token IS NULL`
+      : `DELETE FROM subscriptions WHERE chat_id = ? AND token = ?`;
+    const params = normalizedToken === null ? [String(chatId)] : [String(chatId), normalizedToken];
+
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve(this?.changes);
+    });
+  });
+}
+
+function removeAllSubscriptionsForChat(chatId) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `DELETE FROM subscriptions WHERE chat_id = ?`,
+      [String(chatId)],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this?.changes);
+      }
+    );
+  });
+}
+
+// Bir token için alarm gönderilecek chat_id listesi.
+// token IS NULL olanlar (her şeye abone) + o tokene özel abone olanlar.
+function getSubscribersForToken(tokenAddress) {
+  const normalizedToken = tokenAddress.toLowerCase();
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT DISTINCT chat_id FROM subscriptions WHERE token IS NULL OR token = ?`,
+      [normalizedToken],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows.map((r) => r.chat_id));
+      }
+    );
+  });
+}
+
+function getSubscriptionsForChat(chatId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT token FROM subscriptions WHERE chat_id = ?`,
+      [String(chatId)],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows.map((r) => r.token));
+      }
+    );
+  });
+}
+
+// ========================
+// WALLET LOOKUP
+// ========================
+function getWalletStats(wallet) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT wallet, total_volume, transfer_count, last_seen, whale_score
+       FROM wallets WHERE wallet = ?`,
+      [wallet],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      }
+    );
+  });
+}
+
+function getRecentWhalesForWallet(wallet, limit = 5) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT txHash, token, amount, timestamp
+       FROM whales WHERE wallet = ?
+       ORDER BY timestamp DESC LIMIT ?`,
+      [wallet, limit],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+}
+
+// ========================
+// DIGEST (son N saat özeti)
+// ========================
+function getDigestByToken(hours = 24, limit = 10) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT token, COUNT(*) as count, SUM(amount) as volume
+       FROM whales
+       WHERE timestamp >= datetime('now', ?)
+       GROUP BY token
+       ORDER BY volume DESC
+       LIMIT ?`,
+      [`-${hours} hours`, limit],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+}
+
+function getDigestByWallet(hours = 24, limit = 5) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT wallet, COUNT(*) as count, SUM(amount) as volume
+       FROM whales
+       WHERE timestamp >= datetime('now', ?)
+       GROUP BY wallet
+       ORDER BY volume DESC
+       LIMIT ?`,
+      [`-${hours} hours`, limit],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+}
+
+function getDigestTotalCount(hours = 24) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT COUNT(*) as count FROM whales WHERE timestamp >= datetime('now', ?)`,
+      [`-${hours} hours`],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row ? row.count : 0);
+      }
+    );
+  });
+}
+
 module.exports = {
   insertWhale,
   updateWallet,
   updateWalletScore,
   updateTokenStats,
-  getTopWhales
+  getTopWhales,
+  addSubscription,
+  removeSubscription,
+  removeAllSubscriptionsForChat,
+  getSubscribersForToken,
+  getSubscriptionsForChat,
+  getWalletStats,
+  getRecentWhalesForWallet,
+  getDigestByToken,
+  getDigestByWallet,
+  getDigestTotalCount
 };
