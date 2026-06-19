@@ -23,7 +23,9 @@ Detected events are stored locally and can optionally be forwarded to Telegram f
 - Wallet activity tracking and scoring
 - Token transfer indexing
 - SQLite local database storage (WAL mode)
-- Telegram alert integration with `/top`, `/wallet`, and `/help` commands
+- Multi-user Telegram subscriptions — anyone can subscribe via `/subscribe`, no separate bot deployment needed
+- Per-token subscriptions (subscribe to all alerts, or just one token)
+- On-demand wallet lookup (`/wallet`) and time-window digest summaries (`/digest`)
 - Optional token whitelist to limit RPC load to specific contracts
 
 ---
@@ -102,7 +104,7 @@ TOKEN_WHITELIST=
 |---|---|---|
 | `RPC_URL` | yes | Arc testnet JSON-RPC endpoint |
 | `BOT_TOKEN` | yes | Telegram bot token from @BotFather |
-| `CHAT_ID` | yes | Telegram chat/group ID to send alerts to |
+| `CHAT_ID` | no | Optional fixed chat ID that always receives alerts regardless of subscriptions (e.g. an admin/owner chat). Most users don't need this — they can subscribe via `/subscribe` instead. |
 | `WHALE_THRESHOLD` | no (default 100000) | Minimum decimal-adjusted token amount to trigger an alert |
 | `LARGE_TRANSFER_THRESHOLD` | no (default 250000) | Amount above which an alert is labeled "LARGE" instead of "STANDARD" — a size-based label, not a real liquidity/TVL analysis |
 | `COOLDOWN_MS` | no (default 5000) | Minimum time (ms) between processed transfers from the same wallet |
@@ -113,8 +115,14 @@ TOKEN_WHITELIST=
 
 ## Telegram Commands
 
+- `/subscribe` — subscribe this chat to all whale alerts
+- `/subscribe <token_address>` — subscribe to a specific token only
+- `/unsubscribe` — remove all subscriptions for this chat
+- `/unsubscribe <token_address>` — remove a specific subscription
+- `/mysubs` — list this chat's current subscriptions
 - `/top` — top wallets by tracked volume
-- `/wallet <address>` — look up a wallet (basic info for now)
+- `/wallet <address>` — wallet stats and recent whale transactions
+- `/digest [hours]` — summary of whale activity in the last N hours (default 24)
 - `/help` — list available commands
 
 ---
