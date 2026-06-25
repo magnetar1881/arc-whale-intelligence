@@ -1,32 +1,71 @@
-# Arc Whale Alert Bot
+# Arc Intelligence
 
-A lightweight on-chain monitoring system for detecting large ERC20 transfers and notable wallet activity on Arc testnet.
+A real-time on-chain intelligence platform for the Arc ecosystem.
 
----
-
-## Overview
-
-Arc Whale Alert Bot listens to ERC20 Transfer events in real time and tracks wallet activity across the Arc network.
-
-Because testnets often generate large amounts of faucet, mint, and other non-economic transactions, the system applies custom filtering rules to reduce noise and highlight potentially meaningful on-chain activity.
-
-Detected events are stored locally and can optionally be forwarded to Telegram for real-time monitoring and analysis.
+Arc Intelligence monitors wallet activity, tracks large transfers, and indexes token movements across the Arc network.
 
 ---
 
-## Features
+## Vision
 
-- Real-time ERC20 transfer monitoring
-- Large transaction detection using a configurable, decimal-aware size threshold
-- Mint, faucet, and burn filtering
-- Per-token symbol/decimals caching (reduces RPC calls)
+Arc is growing. But on-chain data is scattered, hard to read, and inaccessible to most users.
+
+Arc Intelligence is being built to change that — starting with a whale tracker and expanding into a full ecosystem intelligence layer: who holds what, who is moving funds, which protocols are active, and where to swap or bridge on Arc.
+
+The goal is not just to collect data, but to make it understandable.
+
+---
+
+## Current State
+
+### On-Chain Scanner
+- Real-time ERC20 Transfer event monitoring
+- Decimal-aware, configurable whale detection threshold
+- Mint, burn, and faucet filtering
+- Per-token symbol and decimals caching (reduces RPC load)
+- In-memory deduplication with TTL-based cleanup (no memory leaks)
+- Optional token whitelist for targeted monitoring
+
+### Database
+- SQLite with WAL mode for concurrent read/write
 - Wallet activity tracking and scoring
 - Token transfer indexing
-- SQLite local database storage (WAL mode)
-- Multi-user Telegram subscriptions — anyone can subscribe via `/subscribe`, no separate bot deployment needed
-- Per-token subscriptions (subscribe to all alerts, or just one token)
-- On-demand wallet lookup (`/wallet`) and time-window digest summaries (`/digest`)
-- Optional token whitelist to limit RPC load to specific contracts
+- Whale event history
+- Multi-user subscription management
+
+### Telegram Bot
+- Real-time whale alerts sent to subscribers
+- Multi-user subscription system — anyone can subscribe, no separate deployment needed
+- Per-token subscriptions (`/subscribe <token_address>`)
+- `/top` — top wallets by tracked volume
+- `/wallet <address>` — wallet stats and recent activity
+- `/digest [hours]` — on-demand summary of whale activity
+- `/mysubs` — manage your subscriptions
+- `/help` — list all commands
+
+---
+
+## Roadmap
+
+### Phase 1 — Intelligence Layer (in progress)
+- [x] Real-time whale scanner
+- [x] Wallet scoring system
+- [x] Telegram alert bot with multi-user subscriptions
+- [x] On-demand digest and wallet lookup
+- [ ] Web API (expose scanner data over HTTP)
+- [ ] `/top tokens` command — most active tokens by volume
+
+### Phase 2 — Web Platform (next)
+- [ ] Ecosystem guide — curated list of Arc DEXs, bridges, and faucets (sourced from Arc official channels)
+- [ ] Web dashboard — live charts: top holders, most active wallets, token volume
+- [ ] Natural language interface — ask questions about Arc network activity and get answers backed by live on-chain data
+- [ ] On-chain data integration — most-used contracts from Arc block explorer
+
+### Phase 3 — Expansion
+- [ ] Multi-chain support
+- [ ] Anomaly detection (unusual wallet behavior)
+- [ ] Smart money tracking
+- [ ] Wallet reputation scoring
 
 ---
 
@@ -37,25 +76,6 @@ Detected events are stored locally and can optionally be forwarded to Telegram f
 - SQLite
 - Telegram Bot API
 - Arc RPC
-
----
-
-## How It Works
-
-1. Connects to Arc RPC endpoint
-2. Subscribes to ERC20 Transfer events
-3. Filters common testnet noise (mint / faucet / spam)
-4. Records wallet and token activity locally
-5. Applies a configurable, decimal-aware size threshold to flag large transfers
-6. Sends Telegram alerts for transfers above the threshold
-
----
-
-## Project Goal
-
-The goal of this project is to make Arc testnet activity more readable by filtering out low-value transactions and surfacing meaningful wallet movements that may indicate liquidity flows or smart activity.
-
-This helps builders and researchers understand network behavior in real time.
 
 ---
 
@@ -71,18 +91,16 @@ Create a `.env` file in the project root (see **Configuration** below), then run
 node src/app.js
 ```
 
-Or, to keep it running persistently with pm2:
+Or with pm2 for persistent operation:
 
 ```bash
-pm2 start src/app.js --name arc-whale
+pm2 start src/app.js --name arc-intelligence
 pm2 save
 ```
 
 ---
 
 ## Configuration
-
-The bot is configured entirely through environment variables. Create a `.env` file in the project root:
 
 RPC_URL=
 
@@ -104,12 +122,12 @@ TOKEN_WHITELIST=
 |---|---|---|
 | `RPC_URL` | yes | Arc testnet JSON-RPC endpoint |
 | `BOT_TOKEN` | yes | Telegram bot token from @BotFather |
-| `CHAT_ID` | no | Optional fixed chat ID that always receives alerts regardless of subscriptions (e.g. an admin/owner chat). Most users don't need this — they can subscribe via `/subscribe` instead. |
-| `WHALE_THRESHOLD` | no (default 100000) | Minimum decimal-adjusted token amount to trigger an alert |
-| `LARGE_TRANSFER_THRESHOLD` | no (default 250000) | Amount above which an alert is labeled "LARGE" instead of "STANDARD" — a size-based label, not a real liquidity/TVL analysis |
+| `CHAT_ID` | no | Fixed chat ID that always receives alerts (admin/owner). Most users subscribe via `/subscribe` instead |
+| `WHALE_THRESHOLD` | no (default 100000) | Minimum token amount (decimal-adjusted) to trigger a whale alert |
+| `LARGE_TRANSFER_THRESHOLD` | no (default 250000) | Amount above which an alert is labeled LARGE — size-based label only, not a liquidity/TVL analysis |
 | `COOLDOWN_MS` | no (default 5000) | Minimum time (ms) between processed transfers from the same wallet |
-| `MEMORY_TTL_MS` | no (default 600000) | How often (ms) in-memory dedup/cooldown state is cleaned up |
-| `TOKEN_WHITELIST` | no | Comma-separated token contract addresses to watch; leave empty to watch all |
+| `MEMORY_TTL_MS` | no (default 600000) | How often in-memory dedup and cooldown state is cleaned up |
+| `TOKEN_WHITELIST` | no | Comma-separated token contract addresses to monitor; leave empty to watch all |
 
 ---
 
@@ -118,20 +136,22 @@ TOKEN_WHITELIST=
 - `/subscribe` — subscribe this chat to all whale alerts
 - `/subscribe <token_address>` — subscribe to a specific token only
 - `/unsubscribe` — remove all subscriptions for this chat
-- `/unsubscribe <token_address>` — remove a specific subscription
-- `/mysubs` — list this chat's current subscriptions
+- `/unsubscribe <token_address>` — remove a specific token subscription
+- `/mysubs` — list current subscriptions
 - `/top` — top wallets by tracked volume
 - `/wallet <address>` — wallet stats and recent whale transactions
-- `/digest [hours]` — summary of whale activity in the last N hours (default 24)
-- `/help` — list available commands
+- `/digest [hours]` — whale activity summary (default: last 24h)
+- `/help` — list all commands
 
 ---
 
-## Planned Improvements (Roadmap)
+## Notes
 
-- Web dashboard (real-time analytics)
-- Historical on-chain analytics
-- Smart money tracking
-- Wallet reputation scoring system
-- True liquidity-aware filtering (DEX pool reserves / TVL / slippage-based — distinct from the current size-based heuristic)
-- Advanced alert types (anomaly detection)
+- Whale detection uses a **size-based heuristic** (transfer amount vs. configurable threshold). This is not a liquidity-aware system — it does not read DEX pool reserves, TVL, or slippage. True liquidity-aware filtering is planned for a later phase.
+- Ecosystem resource recommendations (DEXs, bridges) will be sourced exclusively from Arc official channels (X, Discord). All recommendations will carry a disclaimer: *this information is for reference only — always verify before transacting.*
+
+---
+
+## License
+
+MIT
